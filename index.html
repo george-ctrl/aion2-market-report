@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aion 2 Market</title>
+<style>
+  :root {
+    --bg: #fbfbf9; --panel: #ffffff; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --band: #f3f2ee; --line: #2a78d6; --up: #006300; --down: #d03b3b; --accent: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413; --panel: #1d1d1b; --ink: #f0efe9; --ink2: #c3c2b7; --muted: #898781;
+      --grid: #33332f; --band: #242422; --line: #5aa0f0; --up: #4cc04c; --down: #f07070; --accent: #5aa0f0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 20px 16px 8px; max-width: 1200px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  h2 { font-size: 18px; margin: 24px 0 4px; }
+  .sub { color: var(--ink2); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 14px 0 4px; }
+  .tile { background: var(--panel); border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px; }
+  .tile b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .tile span { color: var(--muted); font-size: 12px; }
+  nav { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--grid); }
+  nav div { max-width: 1200px; margin: 0 auto; padding: 0 16px; display: flex; gap: 4px; overflow-x: auto; }
+  nav button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--ink2); padding: 10px 10px; font: inherit; cursor: pointer; white-space: nowrap; }
+  nav button.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+  main { max-width: 1200px; margin: 0 auto; padding: 0 16px 40px; }
+  .note { color: var(--ink2); margin: 0 0 10px; }
+  .wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--grid); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+  th { color: var(--ink2); font-weight: 600; font-size: 12px; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--panel); }
+  th:first-child, td:first-child { text-align: left; }
+  td.name { white-space: normal; min-width: 160px; }
+  tbody tr.row { cursor: pointer; }
+  tbody tr.row:hover { background: var(--band); }
+  tr.chart td { background: var(--band); text-align: left; }
+  .up { color: var(--up); } .down { color: var(--down); } .mut { color: var(--muted); }
+  svg text { fill: var(--muted); font-size: 11px; }
+  .search { width: 100%; max-width: 360px; padding: 8px 10px; border: 1px solid var(--grid); border-radius: 6px; background: var(--panel); color: var(--ink); font: inherit; margin: 0 0 10px; }
+  .fam { margin-bottom: 18px; }
+  .fam h3 { margin: 18px 0 6px; font-size: 15px; }
+  .fam h3 small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  footer { color: var(--muted); font-size: 12px; max-width: 1200px; margin: 0 auto; padding: 0 16px 30px; }
+  a { color: var(--accent); }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; }
+  .bar .search { margin: 0; width: auto; flex: 1 1 200px; }
+  .bar select.search { flex: 0 1 200px; }
+  .check { color: var(--ink2); white-space: nowrap; }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0 0; }
+  .pills button { background: var(--panel); border: 1px solid var(--grid); border-radius: 16px; padding: 5px 12px; color: var(--ink2); font: inherit; cursor: pointer; }
+  .pills button.on { border-color: var(--accent); color: var(--ink); font-weight: 600; }
+  pre { font: 12px/1.4 ui-monospace, Consolas, monospace; overflow-x: auto; margin: 4px 0; color: var(--ink); }
+  h4 { margin: 8px 0 6px; font-size: 13px; color: var(--ink2); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Aion 2 market</h1>
+  <div class="sub" id="meta">Loading...</div>
+  <div class="tiles" id="tiles"></div>
+</header>
+<nav><div id="tabs"></div></nav>
+<main id="main"></main>
+<footer id="foot"></footer>
+<script src="data.js"></script>
+<script>
+(function () {
+  const R = window.REPORT;
+  const $ = (s) => document.querySelector(s);
+  if (!R) { $('#meta').textContent = 'No report data (data.js is missing).'; return; }
+  const items = R.items;
+  const start = new Date(R.from).getTime();
+  const fmt = new Intl.NumberFormat('en-US');
+  const n = (v) => v == null ? '–' : fmt.format(Math.round(v));
+  const compact = (v) => v == null ? '–' : v >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(2) + 'M'
+      : v >= 1e4 ? (v / 1e3).toFixed(1) + 'k' : fmt.format(Math.round(v * 10) / 10);
+  const pct = (v) => v == null ? '<span class="mut">–</span>'
+      : '<span class="' + (v > 0.0005 ? 'up' : v < -0.0005 ? 'down' : 'mut') + '">' + (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%</span>';
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const when = (iso) => new Date(iso).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});
+
+  // --- charts -----------------------------------------------------------------------------------------------
+  function spark(hours, w, h) {
+    w = w || 90; h = h || 22;
+    if (!hours || hours.length < 2) return '<span class="mut">–</span>';
+    const xs = hours.map(p => p[0]), ys = hours.map(p => p[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const sx = (x) => x1 === x0 ? w / 2 : 1 + (x - x0) / (x1 - x0) * (w - 2);
+    const sy = (y) => y1 === y0 ? h / 2 : h - 2 - (y - y0) / (y1 - y0) * (h - 4);
+    const d = hours.map((p, i) => (i ? 'L' : 'M') + sx(p[0]).toFixed(1) + ' ' + sy(p[1]).toFixed(1)).join('');
+    return '<svg width="' + w + '" height="' + h + '" aria-hidden="true"><path d="' + d + '" fill="none" stroke="var(--line)" stroke-width="1.4"/></svg>';
+  }
+
+  function chart(hours, usual, label) {
+    const W = 760, H = 200, L = 64, B = 22, T = 8, Rp = 26;
+    if (!hours || hours.length < 2) return '<p class="mut">Not enough history for a chart.</p>';
+    const xs = hours.map(p => p[0]), ys = hours.map(p => p[1]).concat(usual != null ? [usual] : []);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    let y0 = Math.min(...ys), y1 = Math.max(...ys);
+    if (y0 === y1) { y0 *= 0.9; y1 *= 1.1; if (y1 === 0) y1 = 1; }
+    const pad = (y1 - y0) * 0.08; y0 = Math.max(0, y0 - pad); y1 += pad;
+    const sx = (x) => L + (x1 === x0 ? 0 : (x - x0) / (x1 - x0)) * (W - L - Rp);
+    const sy = (y) => T + (1 - (y - y0) / (y1 - y0)) * (H - T - B);
+    let g = '';
+    for (let k = 0; k <= 4; k++) {
+      const v = y0 + (y1 - y0) * k / 4, y = sy(v);
+      g += '<line x1="' + L + '" x2="' + (W - Rp) + '" y1="' + y + '" y2="' + y + '" stroke="var(--grid)"/>' +
+           '<text x="' + (L - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + compact(v) + '</text>';
+    }
+    const days = Math.max(1, Math.round((x1 - x0) / 24)), stepH = days > 10 ? 48 : 24;
+    for (let x = Math.ceil(x0 / stepH) * stepH; x <= x1; x += stepH) {
+      const t = new Date(start + x * 3600e3);
+      g += '<text x="' + sx(x) + '" y="' + (H - 6) + '" text-anchor="middle">' + t.toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) + '</text>';
+    }
+    if (usual != null) {
+      g += '<line x1="' + L + '" x2="' + (W - Rp) + '" y1="' + sy(usual) + '" y2="' + sy(usual) + '" stroke="var(--muted)" stroke-dasharray="4 4"/>';
+    }
+    // gaps over 3 hours break the line
+    let d = '';
+    hours.forEach((p, i) => { d += (i === 0 || p[0] - hours[i - 1][0] > 3 ? 'M' : 'L') + sx(p[0]).toFixed(1) + ' ' + sy(p[1]).toFixed(1); });
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="max-width:' + W + 'px" role="img" aria-label="' + esc(label) + ' price chart">' +
+        g + '<path d="' + d + '" fill="none" stroke="var(--line)" stroke-width="1.8"/></svg>' +
+        (usual != null ? '<div class="mut" style="font-size:12px">Dashed line: usual price (' + n(usual) + ')</div>' : '');
+  }
+
+  // --- tables -----------------------------------------------------------------------------------------------
+  const COLS = {
+    traded: ['Traded/day', i => i.tradedPerDay, i => compact(i.tradedPerDay)],
+    avg4w: ['Avg 4 wk', i => i.avg4w, i => n(i.avg4w)],
+    price: ['Cheapest', i => i.price, i => n(i.price)],
+    listings: ['Listings', i => i.listings, i => n(i.listings)],
+    ch24: ['24h', i => i.change24h, i => pct(i.change24h)],
+    vs: ['vs usual', i => i.vsUsual, i => pct(i.vsUsual)],
+    usual: ['Usual', i => i.usual, i => n(i.usual)],
+    now: ['Now', i => i.recent, i => n(i.recent)],
+    low: ['Low', i => i.low, i => n(i.low)],
+    high: ['High', i => i.high, i => n(i.high)],
+    seen: ['Seen', i => i.seen, i => '<span class="mut">' + new Date(i.seen).toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'}) + '</span>'],
+  };
+
+  // rows: [{name, hours, usual, ...}], cols: list of [head, sortValue, html]
+  function table(rows, cols, opts) {
+    opts = opts || {};
+    const el = document.createElement('div');
+    el.className = 'wrap';
+    let sort = opts.sort != null ? opts.sort : null, dir = -1, limit = opts.limit || Infinity;
+    function draw() {
+      let rs = rows.slice();
+      if (sort != null) {
+        const f = sort === -1 ? (r => r.name.toLowerCase()) : cols[sort][1];
+        rs.sort((a, b) => { const x = f(a), y = f(b); if (x == null) return 1; if (y == null) return -1; return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+      }
+      const shown = rs.slice(0, limit);
+      const trend = opts.trend !== false;
+      let h = '<table><thead><tr><th data-c="-1">' + (opts.head || 'Item') + '</th>' + (trend ? '<th>Trend</th>' : '') +
+          cols.map((c, k) => '<th data-c="' + k + '">' + c[0] + '</th>').join('') + '</tr></thead><tbody>';
+      shown.forEach((r, k) => {
+        h += '<tr class="row" data-k="' + k + '"><td class="name">' + esc(r.name) + '</td>' + (trend ? '<td>' + spark(r.hours) + '</td>' : '') +
+            cols.map(c => '<td' + (c[3] ? ' style="text-align:left;white-space:normal"' : '') + '>' + c[2](r) + '</td>').join('') + '</tr>';
+      });
+      h += '</tbody></table>';
+      if (rs.length > shown.length) h += '<div style="padding:8px 10px"><button id="more" class="search" style="width:auto;margin:0;cursor:pointer">Show all ' + rs.length + '</button></div>';
+      el.innerHTML = h;
+      el.querySelectorAll('th[data-c]').forEach(th => th.onclick = () => {
+        const c = +th.dataset.c; dir = sort === c ? -dir : (c === -1 ? 1 : -1); sort = c; draw();
+      });
+      el.querySelectorAll('tr.row').forEach(tr => tr.onclick = () => {
+        const next = tr.nextElementSibling;
+        if (next && next.classList.contains('chart')) { next.remove(); return; }
+        const r = shown[+tr.dataset.k];
+        const c = document.createElement('tr'); c.className = 'chart';
+        c.innerHTML = '<td colspan="' + (cols.length + (trend ? 2 : 1)) + '">' + (opts.detail ? opts.detail(r)
+            : chart(r.chartHours || r.hours, r.chartUsual !== undefined ? r.chartUsual : r.usual, r.name)) + '</td>';
+        tr.after(c);
+      });
+      const more = el.querySelector('#more');
+      if (more) more.onclick = () => { limit = Infinity; draw(); };
+    }
+    el.redraw = (rs) => { rows = rs; draw(); };
+    draw();
+    return el;
+  }
+
+  const pick = (keys) => keys.map(k => items[k]).filter(Boolean);
+  const section = (title, note) => {
+    const s = document.createElement('section');
+    s.innerHTML = '<h2>' + title + '</h2>' + (note ? '<p class="note">' + note + '</p>' : '');
+    return s;
+  };
+
+  // --- tabs -------------------------------------------------------------------------------------------------
+  const moveRule = 'Price now (median of the last 3 hours) against the item\'s usual price (median over the period), at least 15% apart, with 3 or more listings. Click a row for its chart.';
+  const REPORT = [
+    ['Families', () => {
+      const s = section('Crafting materials by family', 'Trade per day and the median price change of each family. Click a row for its price chart.');
+      if (!R.families.length) { s.append('No family items in this period.'); return s; }
+      s.append(table(R.families.map(f => ({name: f.name, hours: f.index, tradedValuePerDay: f.tradedValuePerDay,
+          tradedPerDay: f.tradedPerDay, change24h: f.change24h, vsUsual: f.vsUsual, members: f.items.length, usual: 10000})),
+        [['Items', f => f.members, f => n(f.members)], ['Traded/day', f => f.tradedPerDay, f => compact(f.tradedPerDay)],
+         ['Kinah/day', f => f.tradedValuePerDay, f => compact(f.tradedValuePerDay)], COLS.ch24, COLS.vs], {head: 'Family'}));
+      R.families.forEach(f => {
+        const d = document.createElement('div'); d.className = 'fam';
+        d.innerHTML = '<h3>' + esc(f.name) + '<small>' + f.items.length + ' items</small></h3>';
+        d.append(table(pick(f.items), [COLS.price, COLS.listings, COLS.traded, COLS.ch24, COLS.vs, COLS.low, COLS.high, COLS.avg4w]));
+        s.append(d);
+      });
+      return s;
+    }],
+    ['Most traded', () => {
+      const s = section('Most traded items', 'Outside the material families, by units traded per day over the game\'s 4-week statistics. Click a row for its chart.');
+      s.append(table(pick(R.volume), [COLS.traded, COLS.avg4w, COLS.price, COLS.listings, COLS.ch24, COLS.vs, COLS.low, COLS.high]));
+      return s;
+    }],
+    ['Most valuable', () => {
+      const s = section('Most valuable items', 'By the cheapest listing now. Click a row for its chart.');
+      s.append(table(pick(R.valuable), [COLS.price, COLS.listings, COLS.ch24, COLS.vs, COLS.low, COLS.high, COLS.avg4w]));
+      return s;
+    }],
+    ['Drops', () => {
+      const s = section('Biggest price drops', moveRule);
+      if (!R.drops.length) s.append('No item is that far below its usual price.');
+      else s.append(table(pick(R.drops), [COLS.vs, COLS.usual, COLS.now, COLS.ch24, COLS.price, COLS.listings, COLS.avg4w]));
+      return s;
+    }],
+    ['Rises', () => {
+      const s = section('Biggest price rises', moveRule);
+      if (!R.rises.length) s.append('No item is that far above its usual price.');
+      else s.append(table(pick(R.rises), [COLS.vs, COLS.usual, COLS.now, COLS.ch24, COLS.price, COLS.listings, COLS.avg4w]));
+      return s;
+    }],
+    ['Exchange', () => {
+      const cur = esc(R.currency || 'currency');
+      const s = section('Exchange: Kina Chests', 'Priced in ' + cur + '. What 1M kinah costs with each chest and how much kinah one ' + cur + ' buys. Click a row for the price per 1M kinah over time.');
+      if (!R.exchange.length) { s.append('No Exchange prices in this period.'); return s; }
+      s.append(table(R.exchange.map(c => Object.assign({}, c, {chartHours: c.kinah != null ? c.perMillionHours : c.hours, chartUsual: null})),
+        [['Kinah', c => c.kinah, c => compact(c.kinah)], ['Price (' + cur + ')', c => c.price, c => n(c.price)],
+         ['Per 1M kinah', c => c.perMillion, c => c.perMillion == null ? '–' : c.perMillion.toFixed(2)],
+         ['Kinah per ' + cur, c => c.kinahPerUnit, c => n(c.kinahPerUnit)], COLS.listings, COLS.ch24], {head: 'Chest'}));
+      return s;
+    }],
+    ['All prices', () => {
+      const s = section('All current prices', 'Every item seen in the last 6 hours. Click a column to sort, a row for its chart. <a href="market-prices.csv" download>Download as CSV</a>');
+      const all = pick(R.all);
+      const input = document.createElement('input');
+      input.className = 'search'; input.placeholder = 'Search ' + all.length + ' items...'; input.type = 'search';
+      const t = table(all, [COLS.price, COLS.listings, COLS.ch24, COLS.vs, COLS.low, COLS.high, COLS.avg4w, COLS.traded, COLS.seen], {limit: 200});
+      input.oninput = () => { const q = input.value.trim().toLowerCase(); t.redraw(q ? all.filter(i => i.name.toLowerCase().includes(q)) : all); };
+      s.append(input, t);
+      return s;
+    }],
+  ];
+
+
+  // --- the desktop window's tabs -------------------------------------------------------------------------------
+  const A = R.app || {};
+  const S = A.settings || {};
+  const market = A.market || [], byKey = {};
+  market.forEach(m => byKey[m.key] = m);
+  const profitByName = {};
+  (A.profit || []).forEach(p => profitByName[p.name.toLowerCase()] = p);
+  const label = (o) => o.name || ('#' + o.key);
+  const pctPlain = (v) => v == null ? '–' : (v * 100).toFixed(1) + '%';
+
+  // a search box plus optional dropdown and checkbox above a table; filter(rows, query, choice, checked)
+  function toolbar(s, rows, t, opts) {
+    const bar = document.createElement('div'); bar.className = 'bar';
+    const input = document.createElement('input');
+    input.className = 'search'; input.type = 'search'; input.placeholder = 'Search ' + rows.length + ' ' + (opts.what || 'rows') + '...';
+    bar.append(input);
+    let sel = null, box = null;
+    if (opts.choices) {
+      sel = document.createElement('select'); sel.className = 'search';
+      sel.innerHTML = '<option value="">' + esc(opts.all) + '</option>' + opts.choices.map(c => '<option>' + esc(c) + '</option>').join('');
+      bar.append(sel);
+    }
+    if (opts.check) {
+      const l = document.createElement('label'); l.className = 'check';
+      box = document.createElement('input'); box.type = 'checkbox';
+      l.append(box, ' ' + opts.check); bar.append(l);
+    }
+    const run = () => {
+      const q = input.value.trim().toLowerCase(), c = sel ? sel.value : '', k = box ? box.checked : false;
+      t.redraw(rows.filter(r => (!q || opts.text(r).toLowerCase().includes(q)) && (!c || opts.choice(r) === c) && (!k || opts.keep(r))));
+    };
+    input.oninput = run; if (sel) sel.onchange = run; if (box) box.onchange = run;
+    s.append(bar, t);
+  }
+
+  function book(m) {
+    if (!m || !m.book || !m.book.length) return '<p class="mut">No listings stored for this item.</p>';
+    let total = 0, cost = 0;
+    return '<div class="wrap" style="max-width:640px;margin-bottom:10px"><table><thead><tr><th>Unit price</th><th>Quantity</th><th>Total quantity</th><th>Cost to buy up to here</th><th>Expires</th></tr></thead><tbody>' +
+      m.book.map(l => { total += l[1]; cost += l[0] * l[1];
+        return '<tr><td>' + n(l[0]) + '</td><td>' + n(l[1]) + '</td><td>' + n(total) + '</td><td>' + n(cost) + '</td><td class="mut">' +
+          (l[2] ? new Date(l[2] * 1000).toLocaleString(undefined, {dateStyle: 'short', timeStyle: 'short'}) : '') + '</td></tr>'; }).join('') +
+      '</tbody></table></div>';
+  }
+
+  function itemDetail(key, name) {
+    const it = items[key];
+    return '<h4>Listings</h4>' + book(byKey[key]) + '<h4>Price</h4>' + (it ? chart(it.hours, it.usual, name) : '<p class="mut">No price history in this report.</p>');
+  }
+
+  const APP = [
+    ['Profit', () => {
+      const rows = (A.profit || []).slice();
+      const s = section('Crafting profit', 'Expected profit per craft attempt after the ' + Math.round((S.tax || 0) * 100) + '% tax and the ' +
+          Math.round((S.listingFee || 0) * 100) + '% listing fee; each ingredient is bought where it\'s cheapest (market, NPC, crafted or morphed). ' +
+          'Per day: a ' + Math.round((S.marketShare || 0) * 100) + '% share of what the market sells. Click a recipe for its cost breakdown.');
+      if (!rows.length) { s.append('No recipes on this page.'); return s; }
+      const t = table(rows, [
+        ['Profession', r => r.profession, r => esc(r.profession)], ['Level', r => r.level, r => esc(r.level)],
+        ['Proc', r => r.proc, r => esc(r.proc)], ['Success', r => parseFloat(r.success), r => esc(r.success)],
+        ['Cost', r => r.cost, r => n(r.cost)], ['Net sale', r => r.net, r => n(r.net)],
+        ['Profit', r => r.profit, r => '<span class="' + (r.profit > 0 ? 'up' : r.profit < 0 ? 'down' : '') + '">' + n(r.profit) + '</span>'],
+        ['Margin', r => r.margin, r => pct(r.margin)], ['Sells/day', r => r.soldPerDay, r => n(r.soldPerDay)],
+        ['Crafts/day', r => r.craftsPerDay, r => r.craftsPerDay == null ? '–' : r.craftsPerDay],
+        ['Profit/day', r => r.profitPerDay, r => n(r.profitPerDay)],
+        ['Missing prices', r => r.missing.length, r => r.missing.length ? '<span class="mut">' + esc(r.missing.join(', ')) + '</span>' : '', true],
+      ], {head: 'Recipe', trend: false, sort: 6, limit: 300,
+          detail: r => '<pre>' + esc(r.detail) + '</pre>' + (r.plan ? '<p class="note">Plan: ' + esc(r.plan) + '</p>' : '')});
+      const profs = [...new Set(rows.map(r => r.profession).filter(Boolean))].sort();
+      toolbar(s, rows, t, {what: 'recipes', text: r => r.name, choices: profs, all: 'All professions', choice: r => r.profession,
+          check: 'Only with all prices', keep: r => r.complete});
+      return s;
+    }],
+    ['Alerts', () => {
+      const rows = (A.alerts || []).map(a => Object.assign({}, a, {name: label(a)}));
+      const s = section('Alerts', 'Buys worth a look in the newest price list: ' + Math.round((S.alertsMinDiscount || 0) * 100) +
+          '%+ under the usual price and ' + n(S.alertsMinProfit) + '+ resale profit per unit after tax and fee. Click one for its listings.');
+      if (!rows.length) { s.append('No alerts right now.'); return s; }
+      s.append(table(rows, [
+        ['Alert', a => a.kind, a => esc(a.kind)], ['Cheapest', a => a.price, a => n(a.price)], ['Usual', a => a.usual, a => n(a.usual)],
+        ['Below', a => a.below, a => '<span class="down">' + pctPlain(a.below) + '</span>'], ['Gain/unit', a => a.gain, a => n(a.gain)],
+        ['Listings', a => a.listings, a => n(a.listings)], ['Based on', a => a.note, a => '<span class="mut">' + esc(a.note) + '</span>', true],
+      ], {trend: false, detail: a => itemDetail(a.key, a.name)}));
+      return s;
+    }],
+    ['Market', () => {
+      const rows = market.map(m => Object.assign({}, m, {name: label(m), hours: items[m.key] ? items[m.key].hours : null}));
+      const s = section('Market', 'Every item of the game\'s market with its cheapest listing and 4-week statistics. Click an item for its listings and price chart.');
+      if (!rows.length) { s.append('No market data on this page.'); return s; }
+      const t = table(rows, [
+        ['Cheapest', m => m.price, m => n(m.price)], ['Listings', m => m.listings, m => n(m.listings)],
+        ['4-week avg', m => m.avg4w, m => n(m.avg4w)], ['4-week min', m => m.min4w, m => n(m.min4w)], ['4-week max', m => m.max4w, m => n(m.max4w)],
+        ['Traded/day', m => m.tradedPerDay, m => n(m.tradedPerDay)], ['vs avg', m => m.vsAvg, m => pct(m.vsAvg)],
+        ['Seen', m => m.seen, m => m.seen ? '<span class="mut">' + when(m.seen) + '</span>' : ''],
+      ], {limit: 200, detail: m => itemDetail(m.key, m.name)});
+      toolbar(s, rows, t, {what: 'items', text: m => m.name + ' ' + m.key});
+      return s;
+    }],
+    ['Recipes', () => {
+      const rows = (A.recipes || []).slice();
+      const s = section('Recipes', 'Every known recipe. Click one for its cost breakdown.');
+      if (!rows.length) { s.append('No recipes on this page.'); return s; }
+      const t = table(rows, [
+        ['Profession', r => r.profession, r => esc(r.profession)], ['Level', r => r.level, r => esc(r.level)],
+        ['Output', r => r.output, r => esc(r.output)], ['Proc', r => r.proc, r => esc(r.proc)],
+        ['Ingredients', r => r.ingredients, r => esc(r.ingredients), true],
+      ], {head: 'Recipe', trend: false, limit: 300, detail: r => {
+        const p = profitByName[r.name.toLowerCase()];
+        return p ? '<pre>' + esc(p.detail) + '</pre>' : '<p class="mut">No profit calculation for this recipe.</p>';
+      }});
+      const profs = [...new Set(rows.map(r => r.profession).filter(Boolean))].sort();
+      toolbar(s, rows, t, {what: 'recipes', text: r => r.name + ' ' + r.ingredients, choices: profs, all: 'All professions', choice: r => r.profession});
+      return s;
+    }],
+    ['Report', () => {
+      const s = document.createElement('section');
+      const sub = document.createElement('div'); sub.className = 'pills';
+      const body = document.createElement('div');
+      const choose = (k) => {
+        sub.querySelectorAll('button').forEach((b, j) => b.classList.toggle('on', j === k));
+        body.replaceChildren(REPORT[k][1]());
+      };
+      REPORT.forEach((t, k) => { const b = document.createElement('button'); b.textContent = t[0]; b.onclick = () => choose(k); sub.append(b); });
+      s.append(sub, body);
+      choose(0);
+      return s;
+    }],
+  ];
+  const TABS = APP;
+
+  // --- header -----------------------------------------------------------------------------------------------
+  const days = Math.max(1, Math.round((new Date(R.to) - start) / 864e5));
+  $('#meta').textContent = 'Updated ' + when(R.generated) + (R.server ? ' · server ' + R.server : '') + ' · last ' + days + (days === 1 ? ' day' : ' days');
+  const cheapest = R.exchange.find(c => c.perMillion != null);
+  const moved = R.all.map(k => items[k]).filter(i => i.vsUsual != null);
+  const tiles = [
+    [n(R.all.length), 'items with a current price'],
+    [n(R.lists), 'price lists in the period'],
+    [n(moved.filter(i => i.vsUsual >= 0.15).length) + ' / ' + n(moved.filter(i => i.vsUsual <= -0.15).length), 'items 15%+ above / below usual'],
+  ];
+  if (cheapest) tiles.push([cheapest.perMillion.toFixed(2) + ' ' + esc(R.currency || ''), 'cheapest 1M kinah (' + esc(cheapest.name) + ')']);
+  const best = (A.profit || []).filter(c => c.complete).sort((a, b) => b.profit - a.profit)[0];
+  if (best) tiles.push([n(best.profit), 'best craft: ' + esc(best.name)]);
+  if ((A.alerts || []).length) tiles.push([n(A.alerts.length), 'alerts in the newest price list']);
+  $('#tiles').innerHTML = tiles.map(t => '<div class="tile"><b>' + t[0] + '</b><span>' + t[1] + '</span></div>').join('');
+  $('#foot').innerHTML = 'Prices are the cheapest listing on the market, collected by the Aion 2 market tool. Times are in your local time.';
+
+  const tabs = $('#tabs'), main = $('#main');
+  function show(k) {
+    tabs.querySelectorAll('button').forEach((b, j) => b.classList.toggle('on', j === k));
+    main.replaceChildren(TABS[k][1]());
+    try { history.replaceState(null, '', '#' + encodeURIComponent(TABS[k][0])); } catch (e) {}
+  }
+  TABS.forEach((t, k) => { const b = document.createElement('button'); b.textContent = t[0]; b.onclick = () => show(k); tabs.append(b); });
+  const fromHash = TABS.findIndex(t => '#' + encodeURIComponent(t[0]) === location.hash);
+  show(fromHash >= 0 ? fromHash : 0);
+})();
+</script>
+</body>
+</html>
